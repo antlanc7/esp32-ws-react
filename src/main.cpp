@@ -5,11 +5,9 @@
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 
-#define LED_PIN 10
+#include "wifi_config.h"
 
-// Replace with your network credentials
-#define SSID "PC35"
-#define PSWD "aiaioeax"
+#define LED_PIN 10
 
 bool ledState = 0;
 
@@ -62,7 +60,7 @@ void setup(){
   SPIFFS.begin();
 
   // Connect to Wi-Fi
-  WiFi.begin(SSID, PSWD);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.println("Connecting to WiFi..");
