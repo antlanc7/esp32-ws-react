@@ -8,6 +8,6 @@ export default defineConfig({
     host: true  // allow remote access during development
   },
   build: {
-    outDir: '../data' // deploy to ESP32 SPIFFS
+    outDir: '../firmware/data' // deploy to ESP32 SPIFFS
   }
 })
