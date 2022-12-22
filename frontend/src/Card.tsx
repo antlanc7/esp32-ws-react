@@ -10,10 +10,10 @@ export default function Card(props: CardProps) {
   }
 
   return (
-  <div className="card">
-    <h2>Output - GPIO {props.pinName}</h2>
-    <p className="state" style={pinStateStyle}>{props.pinState}</p>
-    <button className="button" onClick={props.onBtnClick}>Toggle</button>
-  </div>
+    <div className="card">
+      <h2>Output - GPIO {props.pinName}</h2>
+      <p className="state" style={pinStateStyle}>{props.pinState}</p>
+      <button className="button" onClick={props.onBtnClick}>Toggle</button>
+    </div>
   );
 }
