@@ -1,45 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
-import './App.css';
 import Card from './Card';
+import Temperature from './Temperature';
 
 function App() {
   const ws = useRef<WebSocket | null>(null);
   const [ledState, setLedState] = useState("OFF");
-  const [temperature, setTemperature] = useState(0);
-
-  const temperatureStyle = {
-    backgroundColor: temperature > 20 ? "red" : "blue",
-    color: "white"
-  }
+  const [temperature, setTemperature] = useState<number>();
 
   const sendToggle = () => {
     ws.current?.send("toggle");
   }
 
   const initWebSocket = () => {
-    ws.current = new WebSocket(`ws://${import.meta.env.PROD ? window.location.hostname : "esp32-0abc5c.fritz.box"}/ws`)
-    ws.current.onopen = () => console.log("Connected to server");
-    ws.current.onclose = () => console.log("Disconnected from server");
-    ws.current.onmessage = (evt) => {
+    const ws = new WebSocket(`ws://${import.meta.env.PROD ? window.location.hostname : import.meta.env.VITE_ESP32_URI}/ws`)
+    ws.onopen = () => console.log("Connected to server");
+    ws.onclose = () => console.log("Disconnected from server");
+    ws.onmessage = (evt) => {
       if (evt.data == "ON" || evt.data == "OFF") {
         setLedState(evt.data);
       } else {
         setTemperature(parseFloat(evt.data));
       }
     }
+    return ws;
   }
 
   useEffect(() => {
-    if (ws.current == null) initWebSocket();
+    ws.current ??= initWebSocket();
   }, []);
 
   return (
-    <div className="App">
-      <div className="content">
-        <div className="topnav">
-          <h1>ESP WebSocket Server</h1>
-        </div>
-        <h2 className="temperature" style={temperatureStyle}>Temperature: {temperature}°C</h2>
+    <div className="bg-slate-800 text-2xl">
+      <div className="text-center min-h-screen text-white p-8 max-w-screen-sm my-0 mx-auto">
+        <h1 className='text-4xl font-bold my-5'>ESP WebSocket Server</h1>
+        <Temperature value={temperature} />
         <Card pinName="10" pinState={ledState} onBtnClick={sendToggle} />
       </div>
     </div>
