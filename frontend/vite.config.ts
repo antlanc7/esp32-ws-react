@@ -6,8 +6,5 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true  // allow remote access during development
-  },
-  build: {
-    outDir: '../firmware/data' // deploy to ESP32 SPIFFS
   }
 })
