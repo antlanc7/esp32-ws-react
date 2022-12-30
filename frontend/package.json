@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build --emptyOutDir",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "cd ../firmware && pio run -t uploadfs"
   },
   "dependencies": {
     "react": "^18.2.0",
