@@ -3,13 +3,11 @@ import Card from './Card';
 import Temperature from './Temperature';
 
 function App() {
-  const ws = useRef<WebSocket | null>(null);
+  const ws = useRef<WebSocket>();
   const [ledState, setLedState] = useState("OFF");
   const [temperature, setTemperature] = useState<number>();
 
-  const sendToggle = () => {
-    ws.current?.send("toggle");
-  }
+  const sendToggle = () => ws.current?.send("toggle");
 
   const initWebSocket = () => {
     const ws = new WebSocket(`ws://${import.meta.env.PROD ? window.location.hostname : import.meta.env.VITE_ESP32_URI}/ws`)
