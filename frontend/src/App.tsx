@@ -1,41 +1,33 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import useWebSocket from 'react-use-websocket';
 import Card from './Card';
 import Temperature from './Temperature';
 
-function App() {
-  const ws = useRef<WebSocket>();
+export default function App() {
+  const { sendMessage, lastMessage } = useWebSocket(
+    `ws://${import.meta.env.PROD ? window.location.hostname : import.meta.env.VITE_ESP32_URI}/ws`,
+    { shouldReconnect: (closeEvent) => true }
+  );
   const [ledState, setLedState] = useState("OFF");
   const [temperature, setTemperature] = useState<number>();
 
-  const sendToggle = () => ws.current?.send("toggle");
-
-  const initWebSocket = () => {
-    const ws = new WebSocket(`ws://${import.meta.env.PROD ? window.location.hostname : import.meta.env.VITE_ESP32_URI}/ws`)
-    ws.onopen = () => console.log("Connected to server");
-    ws.onclose = () => console.log("Disconnected from server");
-    ws.onmessage = (evt) => {
-      if (evt.data == "ON" || evt.data == "OFF") {
-        setLedState(evt.data);
-      } else {
-        setTemperature(parseFloat(evt.data));
-      }
-    }
-    return ws;
-  }
-
   useEffect(() => {
-    ws.current ??= initWebSocket();
-  }, []);
+    const msg = lastMessage?.data;
+    if (msg === undefined) return;
+    if (msg == "ON" || msg == "OFF") {
+      setLedState(msg);
+    } else {
+      setTemperature(parseFloat(msg));
+    }
+  }, [lastMessage]);
 
   return (
     <div className="bg-slate-800 text-2xl">
       <div className="text-center min-h-screen text-white p-8 max-w-screen-sm my-0 mx-auto">
-        <h1 className='text-4xl font-bold my-5'>ESP WebSocket Server</h1>
+        <h1 className='text-4xl font-bold my-5'>M5Stick Thermostat</h1>
         <Temperature value={temperature} />
-        <Card pinName="10" pinState={ledState} onBtnClick={sendToggle} />
+        <Card pinName="10" pinState={ledState} onBtnClick={() => sendMessage("toggle")} />
       </div>
     </div>
   );
 }
-
-export default App;
