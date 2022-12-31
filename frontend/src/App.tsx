@@ -23,8 +23,8 @@ export default function App() {
 
   return (
     <div className="bg-slate-800 text-2xl">
-      <div className="text-center min-h-screen text-white p-8 max-w-screen-sm my-0 mx-auto">
-        <h1 className='text-4xl font-bold my-5'>M5Stick Thermostat</h1>
+      <div className="text-center text-white min-h-screen max-w-screen-sm mx-auto">
+        <h1 className='text-4xl font-bold py-5'>M5Stick Thermostat</h1>
         <Temperature value={temperature} />
         <Card pinName="10" pinState={ledState} onBtnClick={() => sendMessage("toggle")} />
       </div>
