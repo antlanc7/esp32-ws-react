@@ -31,13 +31,13 @@ void toggleLed() {
 void turnOnDisplay() {
   M5.Axp.SetLDO2(true);
   M5.Axp.SetLDO3(true);
-  displayState = 1;
+  displayState = true;
 }
 
 void turnOffDisplay() {
   M5.Axp.SetLDO2(false);
   M5.Axp.SetLDO3(false);
-  displayState = 0;
+  displayState = false;
 }
 
 void notifyClients() {
@@ -53,8 +53,7 @@ void IRAM_ATTR btnPress() {
 
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo *)arg;
-  if (info->final && info->index == 0 && info->len == len &&
-      info->opcode == WS_TEXT) {
+  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
     if (strcmp((char *)data, "toggle") == 0) {
       toggleLed();
@@ -63,7 +62,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   }
 }
 
-void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
   switch (type) {
     case WS_EVT_CONNECT:
       Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
@@ -117,7 +116,7 @@ void setup() {
     }
   });
 
-  ws.onEvent(onEvent);
+  ws.onEvent(onWsEvent);
   server.addHandler(&ws);
 
   server.begin();
@@ -129,7 +128,7 @@ void loop() {
     displayTime = millis();
     turnOnDisplayRequested = false;
     turnOnDisplay();
-  } else if (displayState == 1 && millis() - displayTime > DISPLAY_TIMEOUT) {
+  } else if (displayState && millis() - displayTime > DISPLAY_TIMEOUT) {
     turnOffDisplay();
   }
   if (notifyClientsRequested) {
