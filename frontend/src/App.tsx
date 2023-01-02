@@ -38,12 +38,10 @@ export default function App() {
   return (
     <div className="bg-slate-800 text-2xl text-center text-white">
       <div className="min-h-screen max-w-screen-sm mx-auto px-8">
-        <div className="flex justify-around items-center px-5">
-          <h1 className='text-4xl font-bold py-5'>Thermostat</h1>
-          <BatteryGauge value={batteryLevel ?? -1} charging={isBatteryCharging} size={100} />
-        </div>
+        <h1 className='text-4xl font-bold py-5'>M5Stick Thermostat</h1>
         <Temperature value={temperature} />
         <Card pinName="10" pinState={ledState} onBtnClick={() => sendMessage("toggle")} />
+        <BatteryGauge className='mx-auto my-8' value={batteryLevel ?? -1} charging={isBatteryCharging} size={100} />
       </div>
     </div>
   );
