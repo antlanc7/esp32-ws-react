@@ -10,8 +10,6 @@ export default function Temperature(props: TemperatureProps) {
                     "bg-red-900"
     );
     return (
-        <div className={`py-2 ${color}`}>
-            <h1>Temperature: <b>{props.value ?? "-"}°C</b></h1>
-        </div>
+        <h1 className={`py-2 ${color}`}>Temperature: <b>{props.value ?? "-"}°C</b></h1>
     );
 }

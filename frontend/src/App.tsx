@@ -12,8 +12,8 @@ export default function App() {
   const [temperature, setTemperature] = useState<number>();
 
   useEffect(() => {
-    const msg = lastMessage?.data;
-    if (msg === undefined) return;
+    if (!lastMessage) return;
+    const msg = lastMessage.data as string;
     if (msg == "ON" || msg == "OFF") {
       setLedState(msg);
     } else {
@@ -22,8 +22,8 @@ export default function App() {
   }, [lastMessage]);
 
   return (
-    <div className="bg-slate-800 text-2xl">
-      <div className="text-center text-white min-h-screen max-w-screen-sm mx-auto">
+    <div className="bg-slate-800 text-2xl text-center text-white">
+      <div className="min-h-screen max-w-screen-sm mx-auto px-8">
         <h1 className='text-4xl font-bold py-5'>M5Stick Thermostat</h1>
         <Temperature value={temperature} />
         <Card pinName="10" pinState={ledState} onBtnClick={() => sendMessage("toggle")} />
