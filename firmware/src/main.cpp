@@ -2,46 +2,35 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <M5StickC.h>
+#include <Preferences.h>
 #include <SPIFFS.h>
 #include <WiFi.h>
+#include <cJSON.h>
 
-#include "wifi_config.h"
+#include "M5Battery.h"
 
 #define LED_PIN 10
 
-const char *stateNames[] = {"OFF", "ON"};
-bool ledState = 0;
-bool notifyClientsRequested = false;
-
+bool ledState = false;
 #define DISPLAY_TIMEOUT 10000
-bool displayState = 1;
+bool displayState = true;
 bool turnOnDisplayRequested = false;
 uint32_t displayTime = 1;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
+AsyncEventSource sse("/events");
+Preferences NVS;
 
 void toggleLed() {
   ledState = !ledState;
   digitalWrite(LED_PIN, !ledState);
-  notifyClientsRequested = true;
 }
 
-void turnOnDisplay() {
-  M5.Axp.SetLDO2(true);
-  M5.Axp.SetLDO3(true);
-  displayState = true;
-}
-
-void turnOffDisplay() {
-  M5.Axp.SetLDO2(false);
-  M5.Axp.SetLDO3(false);
-  displayState = false;
-}
-
-void notifyClients() {
-  ws.textAll(stateNames[ledState]);
+void setDisplay(bool state) {
+  M5.Axp.SetLDO2(state);
+  M5.Axp.SetLDO3(state);
+  displayState = state;
 }
 
 void IRAM_ATTR btnPress() {
@@ -51,36 +40,20 @@ void IRAM_ATTR btnPress() {
   }
 }
 
-void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
-  AwsFrameInfo *info = (AwsFrameInfo *)arg;
-  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-    data[len] = 0;
-    if (strcmp((char *)data, "toggle") == 0) {
-      toggleLed();
-      notifyClients();
-    }
-  }
-}
-
-void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-  switch (type) {
-    case WS_EVT_CONNECT:
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-      client->text(stateNames[ledState]);
-      break;
-    case WS_EVT_DISCONNECT:
-      Serial.printf("WebSocket client #%u disconnected\n", client->id());
-      break;
-    case WS_EVT_DATA:
-      handleWebSocketMessage(arg, data, len);
-      break;
-    case WS_EVT_PONG:
-    case WS_EVT_ERROR:
-      break;
-  }
+char *getStatusJsonString(double temperature) {
+  cJSON *root = cJSON_CreateObject();
+  String temp = String(temperature, 1);
+  cJSON_AddBoolToObject(root, "led", ledState);
+  cJSON_AddRawToObject(root, "temp", temp.c_str());
+  cJSON_AddNumberToObject(root, "battery", (int)getM5BatteryLevel());
+  cJSON_AddBoolToObject(root, "charging", isM5BatteryCharging());
+  char *json = cJSON_PrintUnformatted(root);
+  cJSON_Delete(root);
+  return json;
 }
 
 void setup() {
+  delay(1000);
   M5.begin();
 
   pinMode(LED_PIN, OUTPUT);
@@ -88,22 +61,35 @@ void setup() {
   analogSetAttenuation(ADC_0db);
   attachInterrupt(BUTTON_A_PIN, btnPress, FALLING);
 
+  M5.Lcd.setRotation(1);
   SPIFFS.begin();
 
-  M5.Lcd.setRotation(1);
-  M5.Lcd.println("Connecting to WiFi..");
-  M5.Lcd.println(WIFI_SSID);
-
-  // Connect to Wi-Fi
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
+  NVS.begin("wifi", false);
+  if (NVS.isKey("ssid")) {
+    Serial.println("WiFi credentials found");
+    WiFi.mode(WIFI_STA);
+    String sta_ssid = NVS.getString("ssid");
+    String sta_password = NVS.getString("password");
+    WiFi.begin(sta_ssid.c_str(), sta_password.c_str());
+    M5.Lcd.println("Connecting to WiFi..");
     Serial.println("Connecting to WiFi..");
+    M5.Lcd.println(sta_ssid);
+    WiFi.waitForConnectResult(5000);
+  }
+  NVS.end();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi AP mode");
+    WiFi.mode(WIFI_AP);
+    const char *ap_ssid = "M5StickC-Thermostat";
+    WiFi.softAP(ap_ssid, "12345678");
+    M5.Lcd.println("WiFi AP started");
+    M5.Lcd.println(ap_ssid);
   }
 
   // Print ESP Local IP Address
-  Serial.println(WiFi.localIP());
-  M5.Lcd.println(WiFi.localIP());
+  Serial.println(WiFi.localIP().toString() + " - " + WiFi.softAPIP().toString());
+  M5.Lcd.println(WiFi.localIP().toString() + " - " + WiFi.softAPIP().toString());
 
   server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
 
@@ -116,8 +102,46 @@ void setup() {
     }
   });
 
-  ws.onEvent(onWsEvent);
-  server.addHandler(&ws);
+  server.on(
+      "/wifi", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+      [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        cJSON *json_data = cJSON_ParseWithLength((const char *)data, len);
+        if (json_data == NULL) {
+          request->send(400, "text/plain", "Bad Request");
+          return;
+        }
+        cJSON *ssid = cJSON_GetObjectItem(json_data, "ssid");
+        cJSON *password = cJSON_GetObjectItem(json_data, "password");
+        if (ssid == NULL || password == NULL) {
+          request->send(400, "text/plain", "Bad Request");
+          return;
+        }
+        NVS.begin("wifi", false);
+        NVS.putString("ssid", ssid->valuestring);
+        NVS.putString("password", password->valuestring);
+        NVS.end();
+        request->send(200, "text/plain", "OK");
+      });
+
+  server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "OK");
+    delay(1000);
+    ESP.restart();
+  });
+
+  server.on("/toggle", HTTP_GET, [](AsyncWebServerRequest *request) {
+    toggleLed();
+    request->send(200, "text/plain", "OK");
+  });
+
+  sse.onConnect([](AsyncEventSourceClient *client) {
+    Serial.println("Client connected to SSE, IP: " + client->client()->remoteIP().toString());
+    if (client->lastId()) {
+      Serial.printf("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
+    }
+  });
+
+  server.addHandler(&sse);
 
   server.begin();
   M5.Lcd.setTextSize(4);
@@ -127,21 +151,22 @@ void loop() {
   if (turnOnDisplayRequested) {
     displayTime = millis();
     turnOnDisplayRequested = false;
-    turnOnDisplay();
+    setDisplay(true);
   } else if (displayState && millis() - displayTime > DISPLAY_TIMEOUT) {
-    turnOffDisplay();
+    setDisplay(false);
   }
-  if (notifyClientsRequested) {
-    notifyClients();
-    notifyClientsRequested = false;
+  if (displayState || sse.count() > 0) {
+    double temperature = analogReadMilliVolts(36) / 10.0;
+    // Serial.printf("Temperature: %.1f C\n", temperature);
+    if (displayState) {
+      M5.Lcd.setCursor(0, 40);
+      M5.Lcd.printf("%.1f C", temperature);
+    }
+    if (sse.count() > 0) {
+      char *json = getStatusJsonString(temperature);
+      sse.send(json, "status", millis());
+      free(json);
+    }
   }
-  double temperature = analogReadMilliVolts(36) / 10.0;
-  // Serial.printf("Temperature: %.1f C\n", temperature);
-  if (displayState) {
-    M5.Lcd.setCursor(0, 40);
-    M5.Lcd.printf("%.1f C", temperature);
-  }
-  ws.cleanupClients();
-  ws.textAll(String(temperature));
   delay(500);
 }

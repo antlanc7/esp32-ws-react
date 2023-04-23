@@ -1,4 +1,4 @@
-#include "M5Battery.hpp"
+#include "M5Battery.h"
 
 #include "M5StickC.h"
 
@@ -18,4 +18,8 @@ float getM5BatteryLevel() {
   if (i == VOLTAGE_MAP_SIZE) return 100;  // handle the case where the input voltage is greater than the highest value in the VOLTAGE_MAP array
 
   return 100.0 * (i - 1 + (voltage - VOLTAGE_MAP[i - 1]) / (VOLTAGE_MAP[i] - VOLTAGE_MAP[i - 1])) / (VOLTAGE_MAP_SIZE - 1);
+}
+
+bool isM5BatteryCharging() {
+  return M5.Axp.GetVBusVoltage() > 4.5;
 }

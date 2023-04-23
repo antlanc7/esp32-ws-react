@@ -1,47 +1,73 @@
-import { useEffect, useState } from 'react';
-import BatteryGauge from 'react-battery-gauge';
-import useWebSocket from 'react-use-websocket';
-import Card from './Card';
-import Temperature from './Temperature';
+import { useEffect, useState } from "react";
+import Card from "./Card";
+import Temperature from "./Temperature";
+import Battery from "./Battery";
+
+import { z } from "zod";
+
+const wsMsgSchema = z.object({
+  led: z.boolean(),
+  temp: z.number(),
+  battery: z.number(),
+  charging: z.boolean(),
+});
+
+type WsMsg = z.infer<typeof wsMsgSchema>;
 
 export default function App() {
-  const { sendMessage, lastMessage } = useWebSocket(
-    `ws://${import.meta.env.PROD ? window.location.hostname : import.meta.env.VITE_ESP32_URI}/ws`,
-    { shouldReconnect: (closeEvent) => true }
-  );
-  const [ledState, setLedState] = useState("OFF");
-  const [temperature, setTemperature] = useState<number>();
-  const [batteryLevel, setBatteryLevel] = useState<number>();
-  const [isBatteryCharging, setIsBatteryCharging] = useState(false);
+  const ESP_URL = import.meta.env.VITE_ESP32_URL ?? "";
+  const [status, setStatus] = useState<WsMsg>({
+    led: false,
+    temp: 0,
+    battery: 0,
+    charging: false,
+  });
 
   useEffect(() => {
-    if (!lastMessage) return;
-    const msg = lastMessage.data as string;
-    const msgSplit = msg.split(":");
-    const value = msgSplit[1];
-    switch (msgSplit[0]) {
-      case "0":
-        setLedState(value === "1" ? "ON" : "OFF");
-        break;
-      case "1":
-        setTemperature(parseFloat(value));
-        break;
-      case "2":
-        setBatteryLevel(parseFloat(value));
-        break;
-      case "3":
-        setIsBatteryCharging(value === "1");
-        break;
-    }
-  }, [lastMessage]);
+    const eventSource = new EventSource(ESP_URL + "/events");
+    eventSource.addEventListener("status", (event) => {
+      wsMsgSchema
+        .parseAsync(JSON.parse(event.data))
+        .then((data) => setStatus(data))
+        .catch((err) => console.error(err));
+    });
+    return () => eventSource.close();
+  }, []);
+
+  const setWifi = () => {
+    const ssid = prompt("SSID");
+    const password = prompt("Password");
+    if (!ssid || !password) return;
+    fetch(ESP_URL + "/wifi", {
+      method: "POST",
+      body: JSON.stringify({ ssid, password }),
+    }).then((res) => alert(res));
+  };
+
+  const toggleLed = () => fetch(ESP_URL + "/toggle");
+  const rebootM5 = () => fetch(ESP_URL + "/reboot");
 
   return (
     <div className="bg-slate-800 text-2xl text-center text-white">
       <div className="min-h-screen max-w-screen-sm mx-auto px-8">
-        <h1 className='text-4xl font-bold py-5'>M5Stick Thermostat</h1>
-        <Temperature value={temperature} />
-        <Card pinName="10" pinState={ledState} onBtnClick={() => sendMessage("toggle")} />
-        <BatteryGauge className='mx-auto my-8' value={batteryLevel ?? -1} charging={isBatteryCharging} size={100} />
+        <h1 className="text-4xl font-bold py-5">M5Stick Thermostat</h1>
+        <Temperature value={status.temp} />
+        <Card pinState={status.led} onBtnClick={toggleLed} />
+        <Battery value={status.battery} charging={status.charging} />
+        <div className="flex gap-4 items-center justify-center">
+          <button
+            onClick={setWifi}
+            className="rounded select-none py-4 px-16 bg-slate-400 text-slate-800 hover:bg-slate-300 active:translate-y-0.5"
+          >
+            Set WiFi
+          </button>
+          <button
+            onClick={rebootM5}
+            className="rounded select-none py-4 px-16 bg-slate-400 text-slate-800 hover:bg-slate-300 active:translate-y-0.5"
+          >
+            Reset
+          </button>
+        </div>
       </div>
     </div>
   );
