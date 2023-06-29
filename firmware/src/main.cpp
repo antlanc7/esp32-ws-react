@@ -143,6 +143,8 @@ void setup() {
 
   server.addHandler(&sse);
 
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+
   server.begin();
   M5.Lcd.setTextSize(4);
 }
